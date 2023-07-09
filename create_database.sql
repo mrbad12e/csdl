@@ -10,7 +10,7 @@ create table users(
     last_name text,
     datejoined date default current_date,
     last_login date default current_date,
-    is_active boolean default False,
+    is_active boolean default True,
     is_staff boolean default False,
     is_admin boolean default False,
     is_superadmin boolean default False
@@ -39,6 +39,7 @@ create table product(
     category_name varchar(30) not null,
     created_date date default current_date,
     modified_date date default current_date,
+    stock int default 0,
     constraint category_name_fk_category foreign key (category_name) references category(name)
 );
 
@@ -73,7 +74,7 @@ create table cartitem(
 create table voucher(
     id varchar(20) primary key,
     user_id char(8) not null,
-    percentage decimal,
+    percentage decimal(2),
     limit_discount decimal,
     valid_from date default current_date,
     expiry_date date default '2023-08-01',
@@ -127,4 +128,20 @@ create table orderproduct(
     constraint prod_id_fk_product foreign key (prod_id) references product(id),
     constraint variation_id_fk_var foreign key (variation_id) references variation(id),
     constraint order_id_fk_order foreign key (order_id) references orders(id)
+);
+
+create table ReviewRating (
+    id varchar(20) primary key,
+    user_id char(8) not null,
+    prod_id char(8) not null,
+
+    subject text default null,
+    review text default null,
+    rate decimal(2),
+    status boolean default True,
+    created_at timestamp default current_timestamp,
+    updated_at timestamp default current_timestamp,
+
+    constraint prod_id_fk_product foreign key (prod_id) references product(id),
+    constraint user_id_fk_user foreign key (user_id) references users(id)
 );

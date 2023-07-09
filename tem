@@ -1,0 +1,12 @@
+Fix code: 
+@app.route('/category/?name='+category_name)
+def products_by_category(category_name):
+    cur.execute("SELECT * FROM category WHERE name = %s;", (category_name,))
+    products = cur.fetchall()
+    cur.execute(open("flask_website/sql/functions/show_category.sql", "r").read())
+    categories = cur.fetchall()
+    context = {
+        'products': products,
+        'categories': categories,
+    }
+    return render_template('store/store.html', **context)

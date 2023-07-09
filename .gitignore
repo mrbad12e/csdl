@@ -5,3 +5,5 @@ env/
 *.pot
 *.pyc
 __pycache__/
+
+.git
