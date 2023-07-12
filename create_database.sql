@@ -18,7 +18,7 @@ create table users(
 
 create table user_profile(
     id char(8) primary key,
-    images varchar default 'images/avatars/avatar2.jpg',
+    images varchar(20) default 'images/avatars/avatar2.jpg',
     first_address text null,
     second_address text null,
     city varchar(20),
@@ -64,7 +64,6 @@ create table cart(
 );
 
 create table cartitem(
-    id varchar(30) primary key,
     prod_id char(8) not null,
     cart_id varchar(20) not null, 
     variation_id char(12) null,
@@ -76,21 +75,9 @@ create table cartitem(
     constraint cart_id_fk_cart foreign key (cart_id) references cart(id)
 );
 
-create table voucher(
-    id varchar(20) primary key,
-    user_id char(8) not null,
-    percentage decimal(2),
-    limit_discount decimal,
-    valid_from date default current_date,
-    expiry_date date default '2023-08-01',
-    label text not null,
-    constraint user_id_fk_user foreign key (user_id) references users(id)
-);
-
 create table payment(
     id varchar(20) primary key,
     user_id char(8) not null,
-    voucher_id varchar(20) null,
     cart_id varchar(20) not null,
     status varchar(10) default 'delay' check (status in ('success', 'denied', 'delay')),
     amount_paid decimal not null,
@@ -109,7 +96,6 @@ create table payment(
     created_at timestamp default current_timestamp,
 
     constraint user_id_fk_user foreign key (user_id) references users(id),
-    constraint voucher_id_fk_voucher foreign key (voucher_id) references voucher(id),
     constraint cart_id_fk_cart foreign key (cart_id) references cart(id)
 );
 
@@ -129,7 +115,6 @@ create table orders(
 );
 
 create table orderproduct(
-    id varchar(20) primary key,
     order_id varchar(20) not null,
     prod_id char(8) not null,
     variation_id char(12) null,
