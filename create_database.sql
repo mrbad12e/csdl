@@ -18,8 +18,9 @@ create table users(
 
 create table user_profile(
     id char(8) primary key,
-    first_address text,
-    second_address text,
+    images varchar default 'images/avatars/avatar2.jpg',
+    first_address text null,
+    second_address text null,
     city varchar(20),
     country varchar(20),
     constraint profile_fk_user foreign key (id) references users(id)
@@ -46,16 +47,18 @@ create table product(
 create table variation(
     id char(12) primary key,
     prod_id char(8) not null,
+    label text not null,
     variation_value text null,
     created_date date default current_date,
-    is_active boolean,
+    is_active boolean default True,
     constraint prod_id_fk_product foreign key (prod_id) references product(id)
 );
 
 create table cart(
     id varchar(20) primary key,
-    user_id char(8) not null,
+    user_id char(8),
     date_added date default current_date,
+    is_valid boolean,
     constraint user_id_fk_user foreign key (user_id) references users(id)
 );
 

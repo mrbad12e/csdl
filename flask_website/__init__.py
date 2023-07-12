@@ -3,6 +3,8 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 import psycopg2
 from decouple import config
 import os
+import random
+import string
 
 app = Flask(__name__, static_folder='static')
 app.secret_key = os.environ['SECRET_KEY']
@@ -14,7 +16,8 @@ conn = psycopg2.connect(
     host="localhost",
     database="shopcart",
     user=config('DB_USER'),
-    password=config('DB_PASSWORD')
+    password=config('DB_PASSWORD'),
+    port='5432'
 )
 cur = conn.cursor()
 
@@ -44,6 +47,9 @@ def check_user():
         return user
     return False
 
+def generate_random_id(length):
+    characters = string.ascii_uppercase + string.digits
+    return ''.join(random.sample(characters, k=length))
 @login_manager.user_loader
 def load_user(user_id):
     cur.execute("SELECT email, passw FROM users WHERE id = %s", (user_id,))
@@ -108,18 +114,46 @@ def products_by_category(category_name):
     return render_template('store/store.html', **context)
 
 
-@app.route('/product/<string:prod_id>')
+@app.route('/product/<string:prod_id>', methods=['GET', 'POST'])
 def product_detail(prod_id):
-    cur.execute("select * from product where id = %s", (prod_id,))
+    cur.execute("select * from product where id = %s", (str(prod_id), ))
     product = cur.fetchone()
+    cur.execute("select * from variation where prod_id = %s and label = \'color\'", (prod_id, ))
+    color_variation = cur.fetchall()
+    cur.execute("select * from variation where prod_id = %s and label = \'size\'", (prod_id, ))
+    size_variation = cur.fetchall()
+    user = check_user()
+    if request.method == 'POST':
+        if user:
+            cur.execute("select * from cart where user_id= %s", (str(user[0]), ))
+            cart = cur.fetchone()
+            if cart is None:
+                id = generate_random_id(20)
+                cur.execute("insert into cart (id, user_id, is_valid) values (%s, %s, True)", (id, str(user[0]), ))
+                conn.commit()
+                cur.execute("select * from cart where id= %s", (str(id), ))
+                cart = cur.fetchone()
+                cart_item_id = generate_random_id(30)
+                cur.execute("insert into cartitem (id, prod_id, cart_id) values (%s, %s, %s)", (str(cart_item_id), (prod_id), str(id), ))
+                conn.commit()
+            else: 
+                cart_item_id = generate_random_id(30)
+                cur.execute("insert into cartitem (id, prod_id, cart_id) values (%s, %s, %s)", (str(cart_item_id), (prod_id), str(cart[0]), ))
+                conn.commit()
+            return redirect('/cart')
+        else:
+            return redirect('/signin')
+        
+    else:
+        context = {
+            'product': product,
+            'color_variations': color_variation,
+            'size_variations': size_variation,
+            'user': user,
+            'current_user': current_user,
+        }
 
-    context = {
-        'product': product,
-        'user': check_user(),
-        'current_user': current_user,
-    }
-
-    return render_template('store/product_detail.html', **context)
+        return render_template('store/product_detail.html', **context)
 
 @app.route('/signin', methods=['GET', 'POST'])
 def signin():
@@ -155,3 +189,20 @@ def dashboard():
 def logout():
     logout_user()
     return redirect(url_for("index"))
+
+@app.route('/cart')
+def add_to_cart():
+    user = check_user()
+    cur.execute("select * from cartitem where cart_id in (select id from cart where user_id = %s)", (str(user[0]), ))
+    cartitems = cur.fetchall()
+    product_ids = tuple(item[1] for item in cartitems)
+    cur.execute("select * from product where id in %s", (product_ids,))
+    products = cur.fetchall()
+    context =  {
+        'cartitems': cartitems,
+        'user': check_user(),
+        'current_user': current_user,
+        'products': products,
+    }
+
+    return render_template('store/cart.html', **context)
