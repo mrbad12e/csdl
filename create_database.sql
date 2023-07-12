@@ -59,6 +59,7 @@ create table cart(
     user_id char(8),
     date_added date default current_date,
     is_valid boolean,
+    total_price decimal(2) default 0,
     constraint user_id_fk_user foreign key (user_id) references users(id)
 );
 
@@ -68,6 +69,7 @@ create table cartitem(
     cart_id varchar(20) not null, 
     variation_id char(12) null,
     quantity int default 1,
+    sub_total decimal(2) not null,
 
     constraint prod_id_fk_product foreign key (prod_id) references product(id),
     constraint variation_id_fk_var foreign key (variation_id) references variation(id),
@@ -90,12 +92,22 @@ create table payment(
     user_id char(8) not null,
     voucher_id varchar(20) null,
     cart_id varchar(20) not null,
+    status varchar(10) default 'delay' check (status in ('success', 'denied', 'delay')),
+    amount_paid decimal not null,
+
+    first_name text,
+    last_name text,
+    phone text,
+    email text,
+    first_address text,
+    second_address text,
+    country text,
+    state text,
+    city text,
 
     payment_method varchar default 'online',
-    amount_paid decimal not null,
-    status varchar(10) default 'success' check (status in ('success', 'denied', 'delay')),
     created_at timestamp default current_timestamp,
-    
+
     constraint user_id_fk_user foreign key (user_id) references users(id),
     constraint voucher_id_fk_voucher foreign key (voucher_id) references voucher(id),
     constraint cart_id_fk_cart foreign key (cart_id) references cart(id)
@@ -124,7 +136,7 @@ create table orderproduct(
 
     quantity int,
     prod_price decimal,
-    ordered boolean default False,
+    ordered boolean default True,
     created_at timestamp default current_timestamp,
     updated_at timestamp default current_timestamp,
 
