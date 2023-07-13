@@ -1,3 +1,16 @@
-Fix code:
-cur.execute("insert into payment (id, user_id, cart_id, amount_paid, first_name, last_name, phone, email, first_address, second_address, country, state, city) values (%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,%s,%s,%s)", (id, str(user[0]), str(cartitems[2]), str(total_amount()), first_name, last_name, phone, email, first_address, second_address, country, state, city,))
-conn.commit()
+Fix this code:
+@app.route('/minus/<string:cart_id>/<string:variation_id>/', methods=['POST'])
+def reduce_quantity(cart_id, variation_id):
+    cur.execute('update cartitem set quantity=quantity-1 where cart_id=%s and variation_id=%s', (cart_id, variation_id, ))
+    conn.commit()
+    total_amount()
+    return redirect('/cart')
+
+If that cartitem's quantity =0 then move to remove_item
+
+@app.route('/remove/<string:cart_id>/<string:variation_id>/', methods=['POST'])
+def remove_item(cart_id, variation_id):
+    cur.execute('delete from cartitem where cart_id=%s and variation_id=%s', (cart_id, variation_id, ))
+    conn.commit()
+    total_amount()
+    return redirect('/cart')

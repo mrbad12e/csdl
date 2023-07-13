@@ -18,7 +18,7 @@ create table users(
 
 create table user_profile(
     id char(8) primary key,
-    images varchar(20) default 'images/avatars/avatar2.jpg',
+    images varchar(50) default 'images/avatars/avatar2.jpg',
     first_address text null,
     second_address text null,
     city varchar(20),
@@ -59,7 +59,7 @@ create table cart(
     user_id char(8),
     date_added date default current_date,
     is_valid boolean,
-    total_price decimal(2) default 0,
+    total_price decimal default 0,
     constraint user_id_fk_user foreign key (user_id) references users(id)
 );
 
@@ -68,7 +68,9 @@ create table cartitem(
     cart_id varchar(20) not null, 
     variation_id char(12) null,
     quantity int default 1,
-    sub_total decimal(2) not null,
+    sub_total decimal not null,
+    created_at timestamp default current_timestamp,
+    updated_at timestamp default current_timestamp,
 
     constraint prod_id_fk_product foreign key (prod_id) references product(id),
     constraint variation_id_fk_var foreign key (variation_id) references variation(id),
