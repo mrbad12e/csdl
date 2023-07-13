@@ -6,8 +6,6 @@ create table users(
     id char(8) primary key,
     email varchar(50) unique,
     passw varchar(50) not null,
-    first_name text,
-    last_name text,
     datejoined date default current_date,
     last_login date default current_date,
     is_active boolean default True,
@@ -19,6 +17,8 @@ create table users(
 create table user_profile(
     id char(8) primary key,
     images varchar(50) default 'images/avatars/avatar2.jpg',
+    first_name text null,
+    last_name text null,
     first_address text null,
     second_address text null,
     city varchar(20),

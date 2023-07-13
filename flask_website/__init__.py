@@ -169,11 +169,57 @@ def signin():
         user = User.get(email, password)
         if user:
             login_user(user)
-            return redirect(url_for('dashboard'))
+            user=check_user()
+            cur.execute("select count(*) from orders where user_id = %s", (str(user[0]), ))
+            orders_count = cur.fetchone()
+            context = {
+                'message': "Sign in succesfully",
+                'user': user,
+                'current_user': current_user,
+                'orders_count': orders_count,
+            }
+            return render_template('account/dashboard.html', **context)
         else:
-            return "Wrong email or password!"
+            context = {
+                'message': "Wrong email or password!",
+            }
+            return render_template('account/signin.html', **context)
     else: 
         return render_template('account/signin.html')
+
+@app.route('/register',  methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        cur.execute("select * from users where email = %s", (email, ))
+        user = cur.fetchone()
+        print(user)
+
+        if user:
+            context ={
+                'current_user': current_user,
+                'user': user,
+                'message': "Email has already existed",
+            }
+            return render_template('account/register.html', **context)
+        else:
+            id = generate_random_id(8)
+            cur.execute("insert into users (id, email, passw) values (%s, %s, %s)", (id, email, password, ))
+            conn.commit()
+            cur.execute("insert into user_profile (id) values (%s)", (id, ))
+            conn.commit()
+            cur.execute("select count(*) from orders where user_id = %s", (id, ))
+            orders_count = cur.fetchone()
+            context ={
+                'current_user': current_user,
+                'user': user,
+                'orders_count': orders_count,
+                'message': "Successfully registered",
+            }
+            return render_template('account/dashboard.html', **context)
+    else: 
+        return render_template('account/register.html')
 
 @app.route('/dashboard')
 @login_required
@@ -192,6 +238,7 @@ def dashboard():
     return render_template('account/dashboard.html', **context)
 
 @app.route("/logout")
+@login_required
 def logout():
     logout_user()
     return redirect(url_for("index"))
@@ -306,7 +353,6 @@ def checkout():
 def create_order_product(cartitems, order_id, variation_id):
     if variation_id is None:
         for cartitem in cartitems:
-            id = generate_random_id(20)
             prod_price = cartitem[4] / cartitem[3]
             cur.execute('insert into orderproduct (order_id, prod_id, quantity, prod_price) values (%s, %s, %s, %s)', (str(order_id), str(cartitem[0]), cartitem[3], prod_price))
             conn.commit()
@@ -357,3 +403,48 @@ def place_order():
             'current_user': current_user,
         }
         return render_template('order/payment.html', **context)
+    
+@app.route('/profile', methods=['POST', 'GET'])
+@login_required
+def edit_profile():
+    user = check_user()
+    cur.execute("select count(*) from orders where user_id = %s", (str(user[0]), ))
+    orders_count = cur.fetchone()
+    if request.method=='POST':
+        
+        first_name = request.form['first_name']
+        last_name = request.form['last_name']
+        first_address = request.form['first_address']
+        second_address = request.form['second_address']
+        country = request.form['country']
+        city = request.form['city']
+        cur.execute("insert into user_profile (id, first_name, last_name, first_address, second_address, country, city) values (%s,%s,%s, %s,%s,%s,%s)", (str(user[0]), str(first_name), str(last_name), str(first_address), str(second_address), str(country), str(city),))
+        conn.commit()
+        
+        context ={
+            'current_user': current_user,
+            'user': user,
+            'orders_count': orders_count,
+            'message': "Profile edited successfully",
+        }
+        return render_template('account/dashboard.html', **context)
+    else:
+        context ={
+            'current_user': current_user,
+            'user': user,
+            'orders_count': orders_count,
+        }
+        return render_template('account/edit_profile.html', **context)
+
+@app.route('/my_orders')
+@login_required
+def my_orders():
+    user = check_user()
+    cur.execute("select * from orders where user_id = %s", (str(user[0]), ))
+    orders = cur.fetchall()
+    context = {
+        'orders': orders,
+        'current_user': current_user,
+        'user': user,
+    }
+    return render_template('account/my_orders.html', **context)
