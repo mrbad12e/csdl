@@ -40,6 +40,7 @@ create table product(
     category_name varchar(30) not null,
     created_date date default current_date,
     modified_date date default current_date,
+    avgrate decimal default 5,
     stock int default 0,
     constraint category_name_fk_category foreign key (category_name) references category(name)
 );
@@ -139,7 +140,7 @@ create table ReviewRating (
 
     subject text default null,
     review text default null,
-    rate decimal(2),
+    rate decimal,
     status boolean default True,
     created_at timestamp default current_timestamp,
     updated_at timestamp default current_timestamp,

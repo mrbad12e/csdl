@@ -114,7 +114,7 @@ def products_by_category(category_name):
 def add_quantity(item):
     cur.execute("select * from product where id = %s", (str(item[0]), ))
     product = cur.fetchone()
-    cur.execute("update cartitem set quantity=quantity+1, sub_total= sub_total + %s where prod_id = %s and cart_id = %s and variation_id =%s", (str(product[3]), str(item[0]), str(item[1]), str(item[2]), ))
+    cur.execute("update cartitem set quantity=quantity+1 where prod_id = %s and cart_id = %s and variation_id =%s", (str(product[3]), str(item[0]), str(item[1]), str(item[2]), ))
     conn.commit()
     return redirect('product_detail')
 
@@ -125,40 +125,27 @@ def product_detail(prod_id):
     cur.execute("select * from variation where prod_id = %s and label = \'color\'", (prod_id, ))
     color_variation = cur.fetchall()
     user = check_user()
+    cur.execute("select count(rate) from reviewrating where prod_id = %s", (prod_id, ))
+    countReview = cur.fetchone()
+    countReview = countReview[0]
+
     if request.method == 'POST':
         if user:
             variation = request.form.get('color')
-            print(variation)
-            cur.execute("select * from cart where user_id= %s and is_valid=True", (str(user[0]), ))
-            cart = cur.fetchone()
-            if cart is None:
-                cart_id = generate_random_id(20)
-                cur.execute("insert into cart (id, user_id, is_valid) values (%s, %s, True)", (str(cart_id), str(user[0]),  ))
-                conn.commit()
-                cur.execute("insert into cartitem (prod_id, cart_id, variation_id, sub_total) values (%s, %s, %s, %s)", (str(prod_id), str(cart_id), variation, str(product[3]), ))
-                conn.commit()
-            else:
-                cur.execute("select * from cartitem where cart_id = %s and prod_id= %s and variation_id =%s", (str(cart[0]), str(prod_id), str(variation), ))
-                item = cur.fetchone()
-                print(item)
-                if item is None:
-                    cur.execute("insert into cartitem (prod_id, cart_id, variation_id, sub_total) values (%s, %s, %s, %s)", (str(prod_id), str(cart[0]), variation, str(product[3]), ))
-                    conn.commit()
-                else:
-                    add_quantity(item)
-
+            user_id = user[0]
+            cur.callproc('add_to_cart', (prod_id, variation, user_id))
+            conn.commit()
             return redirect('/cart')
         else:
             return redirect('/signin')
-        
     else:
         context = {
             'product': product,
             'color_variations': color_variation,
             'user': user,
             'current_user': current_user,
+            'countReview': countReview,
         }
-
         return render_template('store/product_detail.html', **context)
 
 @app.route('/signin', methods=['GET', 'POST'])
@@ -192,32 +179,29 @@ def register():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
-        cur.execute("select * from users where email = %s", (email, ))
-        user = cur.fetchone()
-        print(user)
+        id = generate_random_id(8)
+        cur.execute("insert into users (id, email, passw) values (%s, %s, %s)", (id, email, password, ))
+        conn.commit()
+        notices = cur.connection.notices
 
+        user = User.get(email, password)
         if user:
-            context ={
-                'current_user': current_user,
-                'user': user,
-                'message': "Email has already existed",
-            }
-            return render_template('account/register.html', **context)
-        else:
-            id = generate_random_id(8)
-            cur.execute("insert into users (id, email, passw) values (%s, %s, %s)", (id, email, password, ))
-            conn.commit()
-            cur.execute("insert into user_profile (id) values (%s)", (id, ))
-            conn.commit()
+            login_user(user)
             cur.execute("select count(*) from orders where user_id = %s", (id, ))
             orders_count = cur.fetchone()
             context ={
                 'current_user': current_user,
                 'user': user,
+                'message': notices[-1],
                 'orders_count': orders_count,
-                'message': "Successfully registered",
             }
             return render_template('account/dashboard.html', **context)
+        else:
+            context ={
+                'current_user': current_user,
+                'message': notices[-1],
+            }
+            return render_template('account/register.html', **context)
     else: 
         return render_template('account/register.html')
 
@@ -230,9 +214,12 @@ def dashboard():
 
     cur.execute("select count(*) from orders where user_id = %s", (str(user[0]), ))
     orders_count = cur.fetchone()
+    cur.execute("select images from user_profile where id = %s", (str(user[0]), ))
+    image = cur.fetchone()
     context ={
         'current_user': current_user,
         'user': user,
+        'image': image,
         'orders_count': orders_count
     }
     return render_template('account/dashboard.html', **context)
@@ -243,27 +230,16 @@ def logout():
     logout_user()
     return redirect(url_for("index"))
 
-def total_amount():
-    user = check_user()
-    cur.execute("select * from cart where user_id = %s and is_valid = True", (str(user[0]), ))
-    cart = cur.fetchone()
-    cur.execute("select * from cartitem where cart_id = %s and variation_id in (select id from variation)", (str(cart[0]), ))
-    cartitems = cur.fetchall()
-    print(cartitems)
-    total = 0
-    for cartitem in cartitems:
-        total += cartitem[4] * cartitem[3] * decimal.Decimal('1.0')
-    cur.execute("update cart set total_price = %s where id = %s", (total, str(cart[0]), ))
-    conn.commit()
-    return total
-
 @app.route('/cart')
 def add_to_cart():
     user = check_user()
     if not user:
         return redirect('/signin')
-    cur.execute("select * from cartitem where cart_id in (select id from cart where user_id = %s) order by created_at DESC", (str(user[0]), ))
+    cur.execute("select * from cart where user_id = %s and is_valid = True", (str(user[0]), ))
+    cart = cur.fetchone()
+    cur.execute("select * from cartitem where cart_id =%s order by created_at DESC", (str(cart[0]), ))
     cartitems = cur.fetchall()
+    
     product_ids = tuple(item[0] for item in cartitems)
     if not product_ids:
         return redirect('/store')
@@ -274,8 +250,12 @@ def add_to_cart():
         products.extend(product)
 
     variation_ids = tuple(item[2] for item in cartitems)
-    cur.execute("select * from variation where id in %s", (variation_ids,))
-    variations = cur.fetchall()
+    variations=[]
+    for variation_id in variation_ids:
+        cur.execute("select * from variation where id = %s", (variation_id,))
+        variation = cur.fetchall()
+        variations.extend(variation)
+    
 
     context =  {
         'cartitems': cartitems,
@@ -283,7 +263,7 @@ def add_to_cart():
         'current_user': current_user,
         'products': products,
         'variations': variations,
-        'total': total_amount(),
+        'total': cart[4],
     }
     return render_template('store/cart.html', **context)
 
@@ -292,33 +272,28 @@ def reduce_quantity(cart_id, variation_id):
     cur.execute('update cartitem set quantity=quantity-1 where cart_id=%s and variation_id=%s', (cart_id, variation_id, ))
     conn.commit()
 
-    cur.execute('SELECT quantity FROM cartitem WHERE cart_id = %s AND variation_id = %s', (cart_id, variation_id,))
-    result = cur.fetchone()
-    if result and result[0] == 0:
-        
-        return redirect(f'/remove/{cart_id}/{variation_id}/')
-    
-    total_amount()
     return redirect('/cart')
 
 @app.route('/plus/<string:cart_id>/<string:variation_id>/', methods=['POST'])
 def add_cart(cart_id, variation_id):
     cur.execute('update cartitem set quantity=quantity+1 where cart_id=%s and variation_id=%s', (cart_id, variation_id, ))
     conn.commit()
-    total_amount()
     return redirect('/cart')
 
 @app.route('/remove/<string:cart_id>/<string:variation_id>/', methods=['POST', 'GET'])
 def remove_item(cart_id, variation_id):
-    cur.execute('delete from cartitem where cart_id=%s and variation_id=%s', (cart_id, variation_id, ))
+    cur.execute("select * from cartitem where cart_id =%s and variation_id=%s", (str(cart_id), str(variation_id)))
+    cartitem = cur.fetchone()
+    cur.callproc('delete_from_cartitem', (str(cart_id), str(variation_id), cartitem[3]))
     conn.commit()
-    total_amount()
     return redirect('/cart')
 
 @app.route('/cart/checkout', methods=['GET', 'POST'])
 def checkout():
     user = check_user()
-    cur.execute("select * from cartitem where cart_id in (select id from cart where user_id = %s)", (str(user[0]), ))
+    cur.execute("select * from cart where user_id = %s and is_valid = True", (str(user[0]), ))
+    cart = cur.fetchone()
+    cur.execute("select * from cartitem where cart_id=%s order by created_at DESC", (str(cart[0]), ))
     cartitems = cur.fetchall()
     if request.method == 'POST':
         # infomation
@@ -331,31 +306,49 @@ def checkout():
         country = request.form['country']
         state = request.form['state']
         city = request.form['city']
-        id = generate_random_id(20)
-        cur.execute("insert into payment (id, user_id, cart_id, amount_paid, first_name, last_name, phone, email, first_address, second_address, country, state, city) values (%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,%s,%s,%s)", (id, str(user[0]), str(cartitems[0][1]), str(total_amount()), str(first_name), str(last_name), str(phone), str(email), str(first_address), str(second_address), str(country), str(state), str(city),))
-        conn.commit()
+
+        cur.execute("select * from payment where user_id =%s and status=\'delay\'", (user[0], ))
+        payment = cur.fetchone()
+        if payment:
+            cur.execute("update payment set amount_paid = %s where id = %s", (cart[4], str(payment[0]), ))
+            conn.commit()
+            return redirect('/order/payment')
+        else:
+            id = generate_random_id(20)
+            cur.execute("insert into payment (id, user_id, cart_id, amount_paid, first_name, last_name, phone, email, first_address, second_address, country, state, city) values (%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,%s,%s,%s)", (id, str(user[0]), str(cartitems[0][1]), str(cart[4]), str(first_name), str(last_name), str(phone), str(email), str(first_address), str(second_address), str(country), str(state), str(city),))
+            conn.commit()
 
         return redirect('/order/payment')
     
     else:
         product_ids = tuple(item[0] for item in cartitems)
-        cur.execute("select * from product where id in %s", (product_ids,))
-        products = cur.fetchall()
+        products=[]
+        for product_id in product_ids:
+            cur.execute("SELECT * FROM product WHERE id = %s", (product_id,))
+            product = cur.fetchall()
+            products.extend(product)
 
+        variation_ids = tuple(item[2] for item in cartitems)
+        variations=[]
+        for variation_id in variation_ids:
+            cur.execute("select * from variation where id = %s", (variation_id,))
+            variation = cur.fetchall()
+            variations.extend(variation)
         context = {
             'cartitems': cartitems,
+            'variations':variations,
             'products': products,
             'user': user,
             'current_user': current_user,
         }
         return render_template('store/checkout.html', **context)
 
-def create_order_product(cartitems, order_id, variation_id):
-    if variation_id is None:
-        for cartitem in cartitems:
-            prod_price = cartitem[4] / cartitem[3]
-            cur.execute('insert into orderproduct (order_id, prod_id, quantity, prod_price) values (%s, %s, %s, %s)', (str(order_id), str(cartitem[0]), cartitem[3], prod_price))
-            conn.commit()
+def create_order_product(cartitems, order_id):
+    for cartitem in cartitems:
+        cur.execute("select price from product where id = %s", (str(cartitem[0]) ,))
+        prod_price = cur.fetchone()
+        cur.execute('insert into orderproduct (order_id, prod_id, variation_id, quantity, prod_price) values (%s, %s, %s, %s, %s)', (str(order_id), str(cartitem[0]), str(cartitem[2]), cartitem[3], prod_price[0]))
+        conn.commit()
 
 @app.route('/order/payment', methods=['GET', 'POST'])
 def place_order():
@@ -363,40 +356,52 @@ def place_order():
     cur.execute("select * from cart where user_id = %s and is_valid = True", (user[0], ))
     cart = cur.fetchone()
 
-    cur.execute("select * from cartitem where cart_id = %s", (str(cart[0]), ))
+    cur.execute("select * from cartitem where cart_id = %s order by created_at DESC", (str(cart[0]), ))
     cartitems = cur.fetchall()
     cur.execute("select * from payment where user_id =%s and cart_id= %s and status=\'delay\'", (user[0], cart[0]))
     payment = cur.fetchone()
+    
+    product_ids = tuple(item[0] for item in cartitems)
+    products = []
+    for product_id in product_ids:
+        cur.execute("SELECT * FROM product WHERE id = %s", (product_id,))
+        product = cur.fetchall()
+        products.extend(product)
+
+    variation_ids = tuple(item[2] for item in cartitems)
+    cur.execute("select * from variation where id in %s", (variation_ids,))
+    variations = cur.fetchall()
 
     if request.method == 'POST':
-        payment[4] = 'success'
+        cur.execute('update payment set status = \'success\' where id =%s', (payment[0], ))
+        conn.commit()
         id = generate_random_id(20)
-        cur.execute("insert into orders (id, user_id, payment_id, total_price) values (%s, %s, %s, %s)", (str(id), str(user[0]), str(payment[0]), str(payment[5]), ))
+        cur.execute("insert into orders (id, user_id, payment_id, total_price) values (%s, %s, %s, %s)", (str(id), str(user[0]), str(payment[0]), str(payment[4]), ))
         conn.commit()
         cur.execute("select * from orders where id = %s", (str(id), ))
         order = cur.fetchone()
-        create_order_product(cartitems=cartitems, order_id=id, variation_id=payment[2])
+        create_order_product(cartitems=cartitems, order_id=id)
 
         cur.execute("update cart set is_valid = False where id = %s", (cart[0], ))
         conn.commit()
         cur.execute("select * from orderproduct where order_id = %s", (id, ))
         orderproducts = cur.fetchall()
-
+        print(orderproducts)
         context = {
+            'products': products,
+            'variations': variations,
+            'payment': payment,
             'order': order,
             'orderproducts': orderproducts,
             'user': user,
             'current_user': current_user,
         }
         
-        return render_template('order/order_complete.html', )
+        return render_template('order/order_complete.html', **context)
     else:
-        product_ids = tuple(item[0] for item in cartitems)
-        cur.execute("select * from product where id in %s", (product_ids, ))
-        products = cur.fetchall()
-
         context = {
             'cartitems': cartitems,
+            'variations': variations,
             'products': products,
             'payment': payment,
             'user': user,
@@ -448,3 +453,15 @@ def my_orders():
         'user': user,
     }
     return render_template('account/my_orders.html', **context)
+
+@app.route('/submit_review/<string:prod_id>', methods=['POST'])
+def submit_rating(prod_id):
+    user = check_user()
+    if request.method == 'POST':
+        rating = request.form['rating']
+        subject = request.form['subject']
+        review = request.form['review']
+        id = generate_random_id(20)
+        cur.execute("insert into reviewrating (id, user_id, prod_id, subject, review, rate) values (%s, %s, %s, %s,%s, %s)", (str(id), str(user[0]), prod_id, str(subject), str(review), str(rating), ))
+        conn.commit()
+    return redirect(f"/product/{prod_id}")

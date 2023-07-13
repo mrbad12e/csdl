@@ -1,16 +1,22 @@
-Fix this code:
-@app.route('/minus/<string:cart_id>/<string:variation_id>/', methods=['POST'])
-def reduce_quantity(cart_id, variation_id):
-    cur.execute('update cartitem set quantity=quantity-1 where cart_id=%s and variation_id=%s', (cart_id, variation_id, ))
-    conn.commit()
-    total_amount()
-    return redirect('/cart')
+In my database, I have a function like this:
+create or replace function delete_from_cartitem(cart_id char(8), variation_id char(12))
+returns void as $$
+begin
+    delete from cartitem where cart_id=$1 and variation_id=$2;
+end;
+$$language plpgsql;
 
-If that cartitem's quantity =0 then move to remove_item
-
-@app.route('/remove/<string:cart_id>/<string:variation_id>/', methods=['POST'])
+In Flask, I code: 
+@app.route('/remove/<string:cart_id>/<string:variation_id>/', methods=['POST', 'GET'])
 def remove_item(cart_id, variation_id):
-    cur.execute('delete from cartitem where cart_id=%s and variation_id=%s', (cart_id, variation_id, ))
+    cur.callproc('delete_from_cartitem', (cart_id, variation_id, ))
     conn.commit()
-    total_amount()
     return redirect('/cart')
+
+It returned: 
+psycopg2.errors.AmbiguousColumn: column reference "cart_id" is ambiguous
+LINE 1: delete from cartitem where cart_id=$1 and variation_id=$2
+                                   ^
+DETAIL:  It could refer to either a PL/pgSQL variable or a table column.
+QUERY:  delete from cartitem where cart_id=$1 and variation_id=$2
+CONTEXT:  PL/pgSQL function delete_from_cartitem(character,character) line 3 at SQL statement

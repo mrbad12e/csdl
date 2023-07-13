@@ -86,7 +86,7 @@
       			<figcaption class="info">
       				<a href="{{ url_for('product_detail', prod_id=products[index][0]) }}" class="title text-dark">{{ products[index][2] }}</a>
       				<p class="text-muted small">
-      					
+                  {{ variations[index][2] }} : {{ variations[index][3]}} <br />
       				</p>
       			</figcaption>
       		</figure>
